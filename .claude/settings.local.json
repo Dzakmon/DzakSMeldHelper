@@ -4,7 +4,9 @@
       "Read(//c/Repos/WoW/TargetedSpells/**)",
       "Read(//c/Repos/WoW/DandersFrames/**)",
       "Bash(ls \"C:/Repos/WoW/\")",
-      "Read(//c/Repos/WoW/**)"
+      "Read(//c/Repos/WoW/**)",
+      "Bash(mkdir -p \"C:/Repos/WoW/DzakTools/Template\")",
+      "Bash(cp -r \"C:/Repos/WoW/DzakTools/Libs\" \"C:/Repos/WoW/DzakTools/Template/Libs\")"
     ]
   }
 }
