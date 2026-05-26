@@ -1,0 +1,9 @@
+## Interface: 120005, 120007
+## Title: DzakS Meld Helper
+## DefaultState: Enabled
+## Notes: Shows a defensive-ability reminder icon when watched enemy spells target the player
+## Author: jakub.malasek
+## Version: 0.1.0
+## OptionalDeps: TargetedSpells, DandersFrames
+
+DzakSMeldHelper.lua

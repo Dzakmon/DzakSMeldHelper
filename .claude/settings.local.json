@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Repos/WoW/TargetedSpells/**)",
+      "Read(//c/Repos/WoW/DandersFrames/**)",
+      "Bash(ls \"C:/Repos/WoW/\")",
+      "Read(//c/Repos/WoW/**)"
+    ]
+  }
+}
