@@ -1,13 +1,16 @@
 local addonName, ns = ...
 
 -- ============================================================
--- CONFIG
+-- DEFAULTS
+-- These seed DzakSMeldHelperDB on first run. After that the user
+-- manages the lists via the settings panel (with a Reset button
+-- that restores from these defaults).
 -- ============================================================
 
 -- Spell IDs to react to. When an enemy on a nameplate starts casting one of
 -- these and the cast targets the player, the counter-spell reminder icon
 -- is shown. Source: AbilitiesToSMeld.txt
-ns.WatchedSpells = {
+ns.DEFAULT_WATCHED_SPELLS = {
     [388940]  = true,
     [374352]  = true,
     [1282050] = true,
@@ -25,7 +28,7 @@ ns.WatchedSpells = {
 
 -- Counter-spell suggestions, gated by player race. Extend this list when
 -- adding other class/race defensives.
-ns.CounterSpells = {
+ns.DEFAULT_COUNTER_SPELLS = {
     { race = "NightElf", spellId = 58984 }, -- Shadowmeld
 }
 
@@ -40,11 +43,38 @@ local activeThreats = {} -- [unit] = true while a watched cast on the player is 
 local playerName, playerRace
 
 -- ============================================================
--- HELPERS
+-- DB SEEDING
 -- ============================================================
 
+local function SeedDefaultsIfNeeded()
+    DzakSMeldHelperDB = DzakSMeldHelperDB or {}
+    if DzakSMeldHelperDB.enabled == nil then DzakSMeldHelperDB.enabled = true end
+    if not DzakSMeldHelperDB.seeded then
+        DzakSMeldHelperDB.watchedSpells = {}
+        for spellId in pairs(ns.DEFAULT_WATCHED_SPELLS) do
+            DzakSMeldHelperDB.watchedSpells[spellId] = true
+        end
+        DzakSMeldHelperDB.counterSpells = {}
+        for _, entry in ipairs(ns.DEFAULT_COUNTER_SPELLS) do
+            table.insert(DzakSMeldHelperDB.counterSpells, { race = entry.race, spellId = entry.spellId })
+        end
+        DzakSMeldHelperDB.seeded = true
+    end
+    DzakSMeldHelperDB.watchedSpells = DzakSMeldHelperDB.watchedSpells or {}
+    DzakSMeldHelperDB.counterSpells = DzakSMeldHelperDB.counterSpells or {}
+end
+SeedDefaultsIfNeeded()
+
+-- ============================================================
+-- HELPERS (also exposed via ns.* for the settings panel)
+-- ============================================================
+
+function ns.IsEnabled()
+    return DzakSMeldHelperDB.enabled ~= false
+end
+
 local function GetCounterSpellForCurrentPlayer()
-    for _, entry in ipairs(ns.CounterSpells) do
+    for _, entry in ipairs(DzakSMeldHelperDB.counterSpells) do
         if entry.race == playerRace then
             return entry
         end
@@ -105,11 +135,69 @@ local function HideIcon()
     if iconFrame then iconFrame:Hide() end
 end
 
+function ns.SetEnabled(value)
+    DzakSMeldHelperDB.enabled = value and true or false
+    if not value then
+        wipe(activeThreats)
+        HideIcon()
+    end
+    ns.Debug:print("settings", "enabled=", DzakSMeldHelperDB.enabled)
+end
+
+function ns.ResetWatchedDefaults()
+    DzakSMeldHelperDB.watchedSpells = {}
+    for spellId in pairs(ns.DEFAULT_WATCHED_SPELLS) do
+        DzakSMeldHelperDB.watchedSpells[spellId] = true
+    end
+    ns.Debug:print("settings", "reset watched spells to defaults")
+end
+
+function ns.ResetCounterDefaults()
+    DzakSMeldHelperDB.counterSpells = {}
+    for _, entry in ipairs(ns.DEFAULT_COUNTER_SPELLS) do
+        table.insert(DzakSMeldHelperDB.counterSpells, { race = entry.race, spellId = entry.spellId })
+    end
+    ns.Debug:print("settings", "reset counter spells to defaults")
+end
+
+function ns.AddWatchedSpell(spellId)
+    DzakSMeldHelperDB.watchedSpells[spellId] = true
+    ns.Debug:print("settings", "added watched", spellId)
+end
+
+function ns.RemoveWatchedSpell(spellId)
+    DzakSMeldHelperDB.watchedSpells[spellId] = nil
+    ns.Debug:print("settings", "removed watched", spellId)
+end
+
+function ns.AddCounterSpell(race, spellId)
+    for _, entry in ipairs(DzakSMeldHelperDB.counterSpells) do
+        if entry.race == race and entry.spellId == spellId then
+            return false -- already present
+        end
+    end
+    table.insert(DzakSMeldHelperDB.counterSpells, { race = race, spellId = spellId })
+    ns.Debug:print("settings", "added counter", race, spellId)
+    return true
+end
+
+function ns.RemoveCounterSpell(race, spellId)
+    for i, entry in ipairs(DzakSMeldHelperDB.counterSpells) do
+        if entry.race == race and entry.spellId == spellId then
+            table.remove(DzakSMeldHelperDB.counterSpells, i)
+            ns.Debug:print("settings", "removed counter", race, spellId)
+            return true
+        end
+    end
+    return false
+end
+
 -- ============================================================
 -- DETECTION
 -- ============================================================
 
 local function TryShow(unit)
+    if not ns.IsEnabled() then return end
     if UnitIsIrrelevant(unit) then return end
 
     local spellId = GetCurrentCastSpellId(unit)
@@ -118,7 +206,7 @@ local function TryShow(unit)
         return
     end
 
-    local watched = ns.WatchedSpells[spellId]
+    local watched = DzakSMeldHelperDB.watchedSpells[spellId]
     local targetName = UnitSpellTargetName(unit)
     ns.Debug:print("detect", "unit=", unit, "spellId=", spellId, "watched=", watched, "target=", targetName)
 
@@ -196,14 +284,20 @@ frame:SetScript("OnEvent", function(_, event, ...)
 end)
 
 -- ============================================================
--- SLASH COMMAND (debug / testing)
+-- SLASH COMMAND
 -- ============================================================
 
 SLASH_DZAKSMELDHELPER1 = "/dsmh"
 SlashCmdList["DZAKSMELDHELPER"] = function(msg)
     msg = (msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
 
-    if msg == "test" then
+    if msg == "" then
+        if ns.OpenSettings then
+            ns.OpenSettings()
+        else
+            print("|cffff5555DzakSMeldHelper:|r settings panel not loaded")
+        end
+    elseif msg == "test" then
         local counter = GetCounterSpellForCurrentPlayer()
         if counter then
             ShowIconForSpell(counter.spellId)
@@ -217,6 +311,7 @@ SlashCmdList["DZAKSMELDHELPER"] = function(msg)
         print("|cff00ff00DzakSMeldHelper:|r hidden")
     elseif msg == "status" then
         print("|cff00ff00DzakSMeldHelper:|r status")
+        print("  enabled: " .. tostring(ns.IsEnabled()))
         print("  player: " .. tostring(playerName) .. " (" .. tostring(playerRace) .. ")")
         local counter = GetCounterSpellForCurrentPlayer()
         if counter then
@@ -225,16 +320,17 @@ SlashCmdList["DZAKSMELDHELPER"] = function(msg)
             print("  counter-spell: none for this race")
         end
         local watched = 0
-        for _ in pairs(ns.WatchedSpells) do watched = watched + 1 end
+        for _ in pairs(DzakSMeldHelperDB.watchedSpells) do watched = watched + 1 end
         print("  watched spells: " .. watched)
         local active = 0
         for _ in pairs(activeThreats) do active = active + 1 end
         print("  active threats: " .. active)
     else
         print("|cff00ff00DzakSMeldHelper:|r commands:")
+        print("  /dsmh            - open settings panel")
         print("  /dsmh test       - show the icon to verify position/size")
         print("  /dsmh hide       - hide the icon, clear state")
-        print("  /dsmh status     - print player/counter-spell/watch-list state")
+        print("  /dsmh status     - print enabled/player/counter-spell/watch-list state")
         print("  /dsmhdebug       - toggle debug tracing (on|off|<blank>=toggle)")
     end
 end

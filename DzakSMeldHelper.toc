@@ -3,7 +3,7 @@
 ## DefaultState: Enabled
 ## Notes: Shows a defensive-ability reminder icon when watched enemy spells target the player
 ## Author: jakub.malasek
-## Version: 0.2.0
+## Version: 0.3.0
 ## SavedVariables: DzakSMeldHelperDB
 ## OptionalDeps: TargetedSpells, DandersFrames
 
@@ -13,3 +13,4 @@ Libs\LibEditMode\embed.xml
 Debug.lua
 Anchor.lua
 DzakSMeldHelper.lua
+Settings.lua
