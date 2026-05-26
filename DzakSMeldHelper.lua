@@ -83,9 +83,9 @@ local iconFrame
 
 local function EnsureIconFrame()
     if iconFrame then return end
-    iconFrame = CreateFrame("Frame", "DzakSMeldHelperIcon", UIParent)
-    iconFrame:SetSize(64, 64)
-    iconFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    local parent = ns.anchorFrame or UIParent
+    iconFrame = CreateFrame("Frame", "DzakSMeldHelperIcon", parent)
+    iconFrame:SetAllPoints(parent)
     iconFrame:SetFrameStrata("HIGH")
     iconFrame:Hide()
 
@@ -113,21 +113,37 @@ local function TryShow(unit)
     if UnitIsIrrelevant(unit) then return end
 
     local spellId = GetCurrentCastSpellId(unit)
-    if not spellId or not ns.WatchedSpells[spellId] then return end
+    if not spellId then
+        ns.Debug:print("detect", "skip unit=", unit, "reason=no-cast")
+        return
+    end
 
-    if UnitSpellTargetName(unit) ~= playerName then return end
+    local watched = ns.WatchedSpells[spellId]
+    local targetName = UnitSpellTargetName(unit)
+    ns.Debug:print("detect", "unit=", unit, "spellId=", spellId, "watched=", watched, "target=", targetName)
+
+    if not watched then return end
+    if targetName ~= playerName then return end
 
     local counter = GetCounterSpellForCurrentPlayer()
-    if not counter then return end
-    if not IsSpellReady(counter.spellId) then return end
+    if not counter then
+        ns.Debug:print("detect", "skip - no counter-spell for race=", playerRace)
+        return
+    end
+    if not IsSpellReady(counter.spellId) then
+        ns.Debug:print("detect", "skip - counter-spell", counter.spellId, "on cooldown")
+        return
+    end
 
     activeThreats[unit] = true
     ShowIconForSpell(counter.spellId)
+    ns.Debug:print("show", "unit=", unit, "spellId=", spellId, "counter=", counter.spellId)
 end
 
 local function ClearUnit(unit)
     if not activeThreats[unit] then return end
     activeThreats[unit] = nil
+    ns.Debug:print("clear", "unit=", unit)
     if next(activeThreats) == nil then
         HideIcon()
     end
@@ -216,8 +232,9 @@ SlashCmdList["DZAKSMELDHELPER"] = function(msg)
         print("  active threats: " .. active)
     else
         print("|cff00ff00DzakSMeldHelper:|r commands:")
-        print("  /dsmh test   - show the icon to verify position/size")
-        print("  /dsmh hide   - hide the icon, clear state")
-        print("  /dsmh status - print player/counter-spell/watch-list state")
+        print("  /dsmh test       - show the icon to verify position/size")
+        print("  /dsmh hide       - hide the icon, clear state")
+        print("  /dsmh status     - print player/counter-spell/watch-list state")
+        print("  /dsmhdebug       - toggle debug tracing (on|off|<blank>=toggle)")
     end
 end
